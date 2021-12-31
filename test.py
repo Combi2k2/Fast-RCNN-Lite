@@ -4,10 +4,12 @@ import cv2
 import os
 import json
 
-base_path = 'Chess Pieces.v24-416x416_aug.coco/test'
+base_path_train = 'Chess Pieces.v24-416x416_aug.coco/train'
+base_path_valid = 'Chess Pieces.v24-416x416_aug.coco/valid'
+base_path_test  = 'Chess Pieces.v24-416x416_aug.coco/test'
 data = dict()
 
-with open(base_path + '/_annotations.coco.json', 'r') as f:
+with open(base_path_train + '/_annotations.coco.json', 'r') as f:
     data = json.load(f)
 
 images = data["images"]
@@ -20,7 +22,7 @@ for img in images:  file_names[img["id"]] = img["file_name"]
 for box in bboxes:  file_boxes[box["image_id"]].append(box["bbox"])
 
 img_dir = '0b47311f426ff926578c9d738d683e76_jpg.rf.40183eae584a653181bbd795ba3c353f.jpg'
-img = cv2.imread(base_path + '/' + img_dir)
+img = cv2.imread(base_path_train + '/' + img_dir)
 
 idx = file_names.index(img_dir)
 print(idx)

@@ -186,3 +186,4 @@ for epoch in range(num_epochs):
 '''
 ---Saving model---
 '''
+torch.save(model.state_dict(), 'My_RPN.model')

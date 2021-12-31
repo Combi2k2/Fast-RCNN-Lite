@@ -98,7 +98,7 @@ valid_ds = ChessDataset('../Chess Pieces.v24-416x416_aug.coco/valid')
 test_ds = ChessDataset('../Chess Pieces.v24-416x416_aug.coco/test')
 
 num_epochs = 10
-batch_size = 1
+batch_size = 10
 learning_rate = 0.01
 
 train_dl = DataLoader(train_ds, batch_size, shuffle = True, num_workers = 2, pin_memory = True)
@@ -147,7 +147,7 @@ optimizer = torch.optim.SGD(model.parameters(), lr = learning_rate)
 ---Training Phase---
 '''
 for epoch in range(num_epochs):
-    rpn_lambda = 10.
+    rpn_lambda  = 2
     batch_index = 1
     
     for (images, target) in train_dl:
@@ -178,11 +178,10 @@ for epoch in range(num_epochs):
         optimizer.zero_grad(); rpn_total_loss.backward()
         optimizer.step()
 
-        if (batch_index % 50 == 0):
+        if (batch_index % 10 == 0):
             print(f'Epoch {epoch + 1}/{num_epochs}, batch {batch_index}: train_loss = {rpn_total_loss}')
         
         batch_index += 1
-
 
 '''
 ---Saving model---

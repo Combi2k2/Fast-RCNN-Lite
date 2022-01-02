@@ -27,8 +27,6 @@ else:
     print(device)
 
 
-
-
 # List all the layers of VGG16
 model = torchvision.models.vgg16(pretrained = True).to(device)
 layer = list(model.features)

@@ -1,20 +1,9 @@
 import torch
-import torchvision
-import torch.nn as nn
 import torch.nn.functional as F
-from torchvision import transforms
-import matplotlib.pyplot as plt
 import numpy as np
-import json
-import pandas as pd
-import cv2
-from PIL import Image
 
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
-
-from Image_Transform import Image_Prep
-from Boxes_Transform import Annotations_Prep
 
 import json
 import cv2
@@ -50,11 +39,59 @@ def Load_Annotations(base_path):
 
     return  [cv2.imread(f'{base_path}/{name}') for name in pic_names], pic_boxes
 
+'''
+This helps rebalancing the label of the dataset (which initially too bias to negative label)
+'''
+def label_balancing(label, num_classes = 2):
+    pos_index = np.where(label == 1)[0]
+    neg_index = np.where(label == 0)[0]
+
+    n_pos = 0.5 * label.shape[0]
+    n_neg = np.sum(label == 1)
+
+    if len(pos_index) > n_pos:  label[np.random.choice(pos_index, size = (len(pos_index) - n_pos), replace = False)] = -1
+    if len(neg_index) > n_neg:  label[np.random.choice(neg_index, size = (len(neg_index) - n_neg), replace = False)] = -1
+
+'''
+calculate the ground truth value of (dx, dy, dh, dw) (This will be use twice so i wrote it)
+'''
+def calc_gt_locs(regions, gt_bbox):
+    height = regions[:, 2] - regions[:, 0]
+    width  = regions[:, 3] - regions[:, 1]
+    ctr_x  = regions[:, 0] + 0.5 * height
+    ctr_y  = regions[:, 1] + 0.5 * width
+
+    # groundtruth box which correspond this valid anchor box h, w, cx, cy 
+    base_height = gt_bbox[:, 2] - gt_bbox[:, 0]
+    base_width  = gt_bbox[:, 3] - gt_bbox[:, 1]
+    base_ctr_x  = gt_bbox[:, 0] + 0.5 * base_height
+    base_ctr_y  = gt_bbox[:, 1] + 0.5 * base_width
+
+    # valid anchor boxes loc = (y-ya/ha), (x-xa/wa), log(h/ha), log(w/wa)
+    eps = np.finfo(height.dtype).eps
+    height = np.maximum(height, eps) #make height != 0 by let its minimum value be eps
+    width  = np.maximum(width,  eps)
+
+    dx = (base_ctr_x - ctr_x) / width
+    dy = (base_ctr_y - ctr_y) / height
+
+    dh = np.log(base_height / height)
+    dw = np.log(base_width  / width)
+
+    return  np.vstack((dx, dy, dh, dw)).transpose()
+
+'''
+START creating my custom dataset
+'''
+
+from My_Transforms.Image_Transform import Image_Prep
+from My_Transforms.Boxes_Transform import Annotations_Prep
+
 class RPN_Dataset(Dataset):
     def __init__(self, base_path):
         super().__init__()
 
-        images, bboxes = Load_Annotations(bast_path)
+        images, bboxes = Load_Annotations(base_path)
 
         self.images = images
         self.bboxes = bboxes
@@ -71,15 +108,20 @@ class RPN_Dataset(Dataset):
         return  self.n_samples
 
 class ROI_Dataset(Dataset):
-    def __init__(self, base_path):
+    def __init__(self, base_path, device = 'cpu'):
         super().__init__()
 
         images, bboxes = Load_Annotations(base_path)
-
         self.input  = []
         self.target = []
+
+
+        import Load_Models
+        fe_extractor = Load_Models.loload_VGG(device)
+        RPN_model    = Load_Models.load_RPN(device)
         
-        for fname, bbox in zip(images, bboxes):
+
+        for img, bbox in zip(images, bboxes):
             img = Image_Prep(img)
             img = img.unsqueeze(0).to(device)
 

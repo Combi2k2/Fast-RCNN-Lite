@@ -10,8 +10,8 @@ import pandas as pd
 import cv2
 from PIL import Image
 
-from Image_Transform import Image_Prep
-from Boxes_Transform import Annotations_Prep
+from My_Transforms.Image_Transform import Image_Prep
+from My_Transforms.Boxes_Transform import Annotations_Prep
 
 #Setting up my device
 if(torch.cuda.is_available()):
@@ -139,9 +139,8 @@ class RPN_layer(nn.Module):
 '''
 ---Initialize my model---
 '''
-model = RPN_layer().to(device)
-
-optimizer = torch.optim.SGD(model.parameters(), lr = learning_rate)
+RPN_model = RPN_layer().to(device)
+optimizer = torch.optim.SGD(RPN_model.parameters(), lr = learning_rate)
 
 '''
 ---Training Phase---

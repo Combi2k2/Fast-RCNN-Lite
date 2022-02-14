@@ -42,76 +42,68 @@ fe_extractor = nn.Sequential(*layer).to(device)
 
 
 #load my pretrained model
-from RPN_Layer.RPN_train import RPN_layer
-from RPN_Layer.Anchor_Box_Generator import Gen_Anchor
-from RPN_Layer.Image_Transform import Image_Prep
 
-anchor_boxes, index_inside = Gen_Anchor()
-valid_anchor_boxes = anchor_boxes[index_inside]
+from Train.Anchor_Box_Generator import Gen_Anchor
+from Train.NMS_filter import NMS_filter
+from Train.Load_Models import *
 
-anc_height = anchor_boxes[:, 2] - anchor_boxes[:, 0]
-anc_width  = anchor_boxes[:, 3] - anchor_boxes[:, 1]
-anc_ctr_y = anchor_boxes[:, 0] + 0.5 * anc_height
-anc_ctr_x = anchor_boxes[:, 1] + 0.5 * anc_width
+from Train.My_Transforms.Image_Transform import Image_Prep
+from Train.My_Transforms.Boxes_Transform import Annotations_Prep
 
-
+anchor_boxes = Gen_Anchor()
 
 model = RPN_layer()
 model.load_state_dict(torch.load('mask-classifier.model', map_location = torch.device(device)))
 
-with torch.no_grad():
-    img = cv2.imread('Chess Pieces.v24-416x416_aug.coco/test/0b47311f426ff926578c9d738d683e76_jpg.rf.40183eae584a653181bbd795ba3c353f.jpg')
+RPN_model = load_RPN()
 
+with torch.no_grad():
+    img = cv2.imread('/content/test/a3863d0be6002c21b20ac88817b2c56f_jpg.rf.0413d5178136ace55f588df9556c060a.jpg')
+
+    # calculate predicted label and locs
     img_clone = Image_Prep(img)
     img_clone = img_clone.unsqueeze(0).to(device)
 
     outmap = fe_extractor(img_clone)
-    pred_locs, pred_label = model(outmap)
-
-    pred_locs  = pred_locs.permute(0, 2, 3, 1).contiguous().view(-1, 4)
-    pred_label = pred_label.permute(0, 2, 3, 1).contiguous().view(-1, 2)
-
-    pred_anchor_locs_numpy = pred_locs.cpu().data.numpy()
-
-    # The 30000 anchor boxes location and labels predicted by RPN (convert to numpy)
-    # format = (dy, dx, dh, dw)
-    dy = pred_anchor_locs_numpy[:, 0::4] # dy
-    dx = pred_anchor_locs_numpy[:, 1::4] # dx
-    dh = pred_anchor_locs_numpy[:, 2::4] # dw
-    dw = pred_anchor_locs_numpy[:, 3::4] # dh
-
-    # ctr_y = dy predicted by RPN * anchor_h + anchor_cy
-    # ctr_x similar
-    # h = exp(dh predicted by RPN) * anchor_h
-    # w similar
-    ctr_x = dx * anc_height[:, np.newaxis] + anc_ctr_x[:, np.newaxis]
-    ctr_y = dy * anc_width[:, np.newaxis] + anc_ctr_y[:, np.newaxis]
+    pred_locs, pred_score = RPN_model(outmap)
     
-    h = np.exp(dh) * anc_height[:, np.newaxis]
-    w = np.exp(dw) * anc_width[:, np.newaxis]
-    print(w.shape)
+    pred_locs = pred_locs.permute(0, 2, 3, 1)
+    pred_score = pred_score.permute(0, 2, 3, 1)
 
-    _, predictions = torch.max(pred_label, 1)
+    rois = NMS_filter(anchor_boxes, pred_locs, pred_score)
 
+    # show the bounding box of predicted boxes:
     img = cv2.cvtColor(img, cv2.IMREAD_GRAYSCALE)
     img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
     img = cv2.resize(img, dsize = (400, 400), interpolation = cv2.INTER_AREA)
 
-    pos = np.where(predictions > 0)[0]
 
-    print(pos.shape[0])
-    pos = np.random.choice(pos, size = 100)
+    #show the most potential regions
+    fig, ax = plt.subplots(1, 3, figsize=(15,15))
+    fig.tight_layout()
 
-    print(pos)
+    img_clone = img.copy()
 
-    for i in pos:
-        x1 = int(ctr_x[i] - 0.5 * h[i])
-        y1 = int(ctr_y[i] - 0.5 * w[i])
+    for i in range(rois.shape[0] // 3):
+        x1, y1, x2, y2 = rois[i]
+        cv2.rectangle(img_clone, (x1, y1), (x2, y2), (0, 255, 0), 1)
+    
+    ax[0].imshow(img_clone)
 
-        x2 = int(ctr_x[i] + 0.5 * h[i])
-        y2 = int(ctr_y[i] + 0.5 * w[i])
+    #show the regions which are less likely to contain chesspieces
+    img_clone = img.copy()
 
-        cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 1)
+    for i in range(rois.shape[0] // 3, 2 * rois.shape[0] // 3):
+        x1, y1, x2, y2 = rois[i]
+        cv2.rectangle(img_clone, (x1, y1), (x2, y2), (0, 255, 0), 1)
+    
+    ax[1].imshow(img_clone)
 
-plt.figure(figsize = (10, 10))
-plt.imshow(img)
+    #show the least potential regions
+    img_clone = img.copy()
+
+    for i in range(2 * rois.shape[0] // 3, rois.shape[0]):
+        x1, y1, x2, y2 = rois[i]
+        cv2.rectangle(img_clone, (x1, y1), (x2, y2), (0, 255, 0), 1)
+    
+    ax[2].imshow(img_clone)

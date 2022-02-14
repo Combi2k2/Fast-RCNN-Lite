@@ -1,4 +1,5 @@
 import torch.nn as nn
+import torch.nn.functional as F
 
 n_anchor = 12 # number of anchor boxes having the center being the current point
 
@@ -29,25 +30,20 @@ class RPN_layer(nn.Module):
         return  pred_anchor_locs, pred_anchor_label
 
 
-class ROI_Layer(nn.Module):
+class ROI_Classifier(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.fc1 = nn.Linear(10 * 10 * 512, 4096)
+        self.fc1 = nn.Linear(512 * 7 * 7, 128)
 
-        self.reg_layer = nn.Linear(4096, 4)
-        self.reg_layer.weight.data.normal_(0, 0.01)
-        self.reg_layer.bias.data.zero_()    
-
-        self.cls_layer = nn.Linear(4096, 2)
-        self.cls_layer.weight.data.normal_(0, 0.01)
-        self.cls_layer.bias.data.zero_()
+        self.reg_layer = nn.Linear(128, 4)  
+        self.cls_layer = nn.Linear(128, 2)
          
     def forward(self, x):
-        x = x.view(-1)
-        x = nn.ReLU(self.fc1(x))
+        out = x.view(-1, 512 * 7 * 7)
+        out = F.relu(self.fc1(out))
 
-        pred_score = self.cls_layer(x)
-        pred_locs  = self.reg_layer(x)
-
+        pred_locs  = self.reg_layer(out)
+        pred_score = self.cls_layer(out)
+        
         return  pred_locs, pred_score

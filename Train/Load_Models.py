@@ -11,7 +11,7 @@ from PIL import Image
 
 # List all the layers of VGG16
 
-from Models_Baseline import *
+from Models_Baseline import RPN_layer, ROI_Classifier
 
 def load_VGG(device = 'cpu'):
     model = nn.Sequential(
@@ -46,11 +46,11 @@ def load_RPN(device = 'cpu'):
     return  RPN_model
 
 def load_ROI(device = 'cpu'):
-    ROI_model = ROI_layer().to(device)
+    ROI_model = ROI_Classifier().to(device)
     ROI_model.load_state_dict(torch.load('../models/My_ROI.model', map_location = torch.device(device)))
 
     return  ROI_model
 
 if __name__ == '__main__':
-    fe_extractor = load_VGG('cpu')
+    fe_extractor = load_VGG()
     print(fe_extractor)
